@@ -1,0 +1,438 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  role         String    @default("VISITOR")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  sessions         Session[]
+  teamMemberships  TeamMember[]
+  teamsOwned       Team[]
+  judgeAssignments Judge[]
+  votes            Vote[]
+  voteAudits       VoteAudit[]
+  comments         Comment[]
+  auditLogs        AuditLog[]
+  eventsOrganized  Event[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  status      String   @default("DRAFT")
+
+  registrationStart DateTime?
+  registrationEnd   DateTime?
+  submissionStart   DateTime?
+  submissionEnd     DateTime?
+  judgingStart      DateTime?
+  judgingEnd        DateTime?
+  votingStart       DateTime?
+  votingEnd         DateTime?
+
+  organizerId        String
+  organizer          User     @relation(fields: [organizerId], references: [id], onDelete: Restrict)
+  maxTeamSize        Int      @default(5)
+  allowIndividual    Boolean  @default(false)
+  allowCommunityVote Boolean  @default(true)
+  votingMode         String   @default("OPEN_LINK")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tracks       Track[]
+  prizes       Prize[]
+  teams        Team[]
+  submissions  Submission[]
+  judges       Judge[]
+  rubrics      Rubric[]
+  votes        Vote[]
+  voteAudits   VoteAudit[]
+  certificates Certificate[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([organizerId])
+}
+
+model Track {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  position    Int?
+  createdAt   DateTime @default(now())
+
+  submissions Submission[]
+  prizes      Prize[]
+  judges      JudgeTrack[]
+
+  @@index([eventId])
+}
+
+model Prize {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  trackId     String?
+  track       Track?   @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  rank        Int
+  title       String
+  description String?
+  reward      String?
+  position    Int?
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+  @@index([trackId])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  description String?
+  status      String   @default("FORMING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     TeamMember[]
+  submissions Submission[]
+
+  @@index([eventId])
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id         String    @id @default(cuid())
+  teamId     String
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       String    @default("MEMBER")
+  status     String    @default("PENDING")
+  invitedAt  DateTime  @default(now())
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Submission {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teamId  String
+  team    Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  trackId String
+  track   Track  @relation(fields: [trackId], references: [id], onDelete: Restrict)
+
+  name         String
+  tagline      String?
+  description  String?
+  thumbnailUrl String?
+
+  demoUrl       String?
+  repositoryUrl String?
+  videoUrl      String?
+
+  status      String    @default("DRAFT")
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fields          SubmissionField[]
+  scores          Score[]
+  votes           Vote[]
+  comments        Comment[]
+  assignments     JudgeAssignment[]
+  normalizedScore NormalizedScore?
+
+  @@index([eventId])
+  @@index([teamId])
+  @@index([trackId])
+  @@index([status])
+}
+
+model SubmissionField {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  fieldName    String
+  fieldValue   String?
+  createdAt    DateTime   @default(now())
+
+  @@index([submissionId])
+}
+
+model Judge {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  status     String    @default("INVITED")
+  invitedAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  scoringBias Float?
+
+  createdAt DateTime @default(now())
+
+  tracks      JudgeTrack[]
+  assignments JudgeAssignment[]
+  scores      Score[]
+
+  @@unique([eventId, userId])
+  @@index([status])
+}
+
+model JudgeTrack {
+  id        String   @id @default(cuid())
+  judgeId   String
+  judge     Judge    @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([judgeId, trackId])
+}
+
+model Rubric {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  scaleMin    Int      @default(1)
+  scaleMax    Int      @default(5)
+  createdAt   DateTime @default(now())
+
+  criteria Criterion[]
+
+  @@index([eventId])
+}
+
+model Criterion {
+  id          String   @id @default(cuid())
+  rubricId    String
+  rubric      Rubric   @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  weight      Float // 0.0 to 1.0
+  position    Int?
+  createdAt   DateTime @default(now())
+
+  scores Score[]
+
+  @@index([rubricId])
+}
+
+model JudgeAssignment {
+  id           String     @id @default(cuid())
+  judgeId      String
+  judge        Judge      @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  assignedAt  DateTime  @default(now())
+  status      String    @default("PENDING")
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([judgeId, submissionId])
+  @@index([status])
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  judgeId      String
+  judge        Judge      @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterionId  String
+  criterion    Criterion  @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  score   Int
+  comment String?
+
+  submittedAt     DateTime @default(now())
+  normalizedScore Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([judgeId, submissionId, criterionId])
+  @@index([submissionId])
+  @@index([judgeId])
+}
+
+model NormalizedScore {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  rawAverage Float?
+  rawStdDev  Float?
+  rawRank    Int?
+
+  normalizedAverage Float?
+  normalizedStdDev  Float?
+  normalizedRank    Int?
+
+  judgeCount          Int
+  normalizationMethod String
+  calculatedAt        DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([normalizedRank])
+}
+
+model Vote {
+  id           String     @id @default(cuid())
+  eventId      String
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  voterId    String?
+  voter      User?   @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  voterEmail String?
+
+  ipAddress String?
+  userAgent String?
+  votedAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([submissionId])
+  @@index([voterId])
+  @@index([ipAddress])
+}
+
+model VoteAudit {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  detectionType String // RATE_LIMIT, DUPLICATE, SUSPICIOUS
+  severity      String // LOW, MEDIUM, HIGH
+
+  ipAddress String?
+  userAgent String?
+  voterId   String?
+  voter     User?   @relation(fields: [voterId], references: [id], onDelete: SetNull)
+  message   String?
+
+  status         String  @default("NEW") // NEW, REVIEWED, DISMISSED, ACTION_TAKEN
+  organizerNotes String?
+
+  detectedAt DateTime  @default(now())
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([eventId])
+  @@index([status])
+}
+
+model Comment {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content         String
+  parentCommentId String?
+  parent          Comment?  @relation("CommentThread", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentThread")
+
+  status String @default("PUBLISHED") // PUBLISHED, MODERATED, DELETED
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([submissionId])
+  @@index([userId])
+}
+
+model Certificate {
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recipientName   String
+  certificateType String // PARTICIPANT, JUDGE, WINNER
+  rank            Int?
+  pdfUrl          String?
+
+  issuedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress String?
+  sessionId String?
+
+  action       String
+  resourceType String?
+  resourceId   String?
+
+  details      String? // JSON stored as string in SQLite
+  result       String // SUCCESS, FAILURE
+  errorMessage String?
+
+  timestamp DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+}
