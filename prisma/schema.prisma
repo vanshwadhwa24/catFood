@@ -146,9 +146,10 @@ model TeamMember {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role       String    @default("MEMBER")
   status     String    @default("PENDING")
-  invitedAt  DateTime  @default(now())
-  acceptedAt DateTime?
-  createdAt  DateTime  @default(now())
+  inviteToken String?   @unique
+  invitedAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
 
   @@unique([teamId, userId])
   @@index([userId])

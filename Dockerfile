@@ -6,11 +6,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
+# Install client dependencies
+COPY client/package*.json ./client/
+RUN cd client && npm install
+
 # Copy source
 COPY . .
 
-# Generate Prisma client and build TypeScript
+# Generate Prisma client and build TypeScript backend and client
 RUN npx prisma generate && npm run build
+RUN cd client && npm run build
 
 # Create data directory
 RUN mkdir -p data
