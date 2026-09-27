@@ -7,7 +7,7 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:./data/dogfood.db
+      DATABASE_URL: file:../data/dogfood.db
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-in-prod}
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       APP_PORT: 3000
